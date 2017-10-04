@@ -710,6 +710,8 @@ class EsaCciOdpDataSource(DataSource):
         try:
             if protocol == _ODP_PROTOCOL_OPENDAP:
 
+                import time
+
                 do_update_of_variables_meta_info_once = True
                 do_update_of_region_meta_info_once = True
 
@@ -719,7 +721,7 @@ class EsaCciOdpDataSource(DataSource):
                 monitor.start('Sync ' + self.id, total_work=len(files))
                 for idx, dataset_uri in enumerate(files):
                     child_monitor = monitor.child(work=1)
-
+                    print(time.asctime(), "child_monit ", idx, dataset_uri)
                     file_name = os.path.basename(dataset_uri)
                     local_filepath = os.path.join(local_path, file_name)
 
@@ -729,6 +731,7 @@ class EsaCciOdpDataSource(DataSource):
                     remote_netcdf = None
                     local_netcdf = None
                     try:
+                        print(time.asctime(), "child_start ", idx, dataset_uri)
                         child_monitor.start(label=file_name, total_work=1)
                         remote_netcdf = NetCDF4DataStore(dataset_uri)
 
@@ -736,7 +739,7 @@ class EsaCciOdpDataSource(DataSource):
                         local_netcdf.set_attributes(remote_netcdf.get_attrs())
 
                         remote_dataset = xr.Dataset.load_store(remote_netcdf)
-
+                        print(time.asctime(), "variables", var_names)
                         if var_names:
                             if add_coords_once:
                                 var_names.extend([var_name for var_name in remote_dataset.coords.keys()])
@@ -744,7 +747,7 @@ class EsaCciOdpDataSource(DataSource):
                             remote_dataset = remote_dataset.drop(
                                 [var_name for var_name in remote_netcdf.variables.keys()
                                  if var_name not in var_names])
-
+                        print(time.asctime(), "region", region)
                         if region:
                             remote_dataset = subset_spatial_impl(remote_dataset, region, True)
                             geo_lon_min, geo_lat_min, geo_lon_max, geo_lat_max = region.bounds
@@ -759,17 +762,20 @@ class EsaCciOdpDataSource(DataSource):
                                 local_ds.meta_info['bbox_maxy'] = geo_lat_max
                                 local_ds.meta_info['bbox_miny'] = geo_lat_min
                                 do_update_of_region_meta_info_once = False
-
+                        print(time.asctime(), "compression_enabled", compression_enabled)
                         if compression_enabled:
                             for sel_var_name in remote_dataset.variables.keys():
                                 remote_dataset.variables.get(sel_var_name).encoding.update(encoding_update)
-
+                        print(time.asctime(), "store_dataset")
                         local_netcdf.store_dataset(remote_dataset)
 
                         child_monitor.progress(work=1, msg=str(time_coverage_start))
                     finally:
+                        print(time.asctime(), "remote_netcdf.close()")
                         if remote_netcdf:
                             remote_netcdf.close()
+                        print(time.asctime(), "do_update_of_variables_meta_info_once",
+                              do_update_of_variables_meta_info_once)
                         if do_update_of_variables_meta_info_once:
                             variables_info = local_ds.meta_info.get('variables', [])
                             local_ds.meta_info['variables'] = [var_info for var_info in variables_info
@@ -778,6 +784,7 @@ class EsaCciOdpDataSource(DataSource):
                                                                var_info.get('name')
                                                                not in local_netcdf.dimensions.keys()]
                             do_update_of_variables_meta_info_once = False
+                        print(time.asctime(), "local_netcdf.close()")
                         if local_netcdf:
                             local_netcdf.close()
                             local_ds.add_dataset(os.path.join(local_id, file_name),
@@ -787,6 +794,7 @@ class EsaCciOdpDataSource(DataSource):
                                 verified_time_coverage_start = time_coverage_start
                                 do_update_of_verified_time_coverage_start_once = False
                             verified_time_coverage_end = time_coverage_end
+                    print(time.asctime(), "child_monitor.done()")
                     child_monitor.done()
             else:
                 outdated_file_list = []
